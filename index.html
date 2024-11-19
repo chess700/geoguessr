@@ -1,0 +1,220 @@
+<html>
+<head>
+<link rel="stylesheet" href="leaflet.css">
+<link  href="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css"  rel="stylesheet"/>
+</head>
+<body>
+
+<div id="notice" style="position:fixed; z-index:1000; top:50%; left:50%; width:100%; text-align:center; color:white; text-shadow:rgba(0,0,0,0.75) 0 2px 10px; font-family:sans-serif; font-weight:900; font-size:20px; pointer-events:none; font-weight:900; transform:translate3d(-50%,-50%,0);">
+
+</div>
+
+<div id="map" style="width:25vw; height:30vh; position:fixed; z-index:1000; bottom:2rem; right:2rem; "></div>
+
+<div id="panorama" style="width:100%; height:100%; position:fixed; top:0; left:0;"></div>
+
+<script src="leaflet.js"></script>
+
+<script src="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js"></script>
+
+
+<script>
+var map = L.map('map', {
+    center: [51.505, -0.09],
+    zoom: 0
+});
+ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: ''
+}).addTo(map);
+
+let spotToGuessCoords = null;
+
+let markerGuess;
+let markerActualSpot;
+
+
+
+function calculatePoints(distance) {
+
+        const maxPoints = 5000; // Max points for 0 miles away
+        const k = 2000; // Adjust the constant to control the rate of decay
+
+        // Ensure the distance is within a valid range
+        if (distance < 0) distance = 0;
+
+        // Calculate points using the exponential decay formula
+        const points = maxPoints * Math.exp(-distance / k);
+
+        return Math.round(points);
+
+
+
+
+
+
+}
+
+function onMapClick(e) {
+
+    if (!confirm("Are you sure?")){
+        return;
+    }
+
+    if (markerGuess){
+        markerGuess.remove();
+    }
+    if (markerActualSpot){
+        markerActualSpot.remove();
+    }
+    markerGuess = L.marker(e.latlng).addTo(map);
+
+    const spotToGuessCoordsLatLng = new L.latLng(spotToGuessCoords.lat, spotToGuessCoords.lng);
+
+    const distance = map.distance(spotToGuessCoordsLatLng, e.latlng);
+
+    const miles = distance * 0.000621371;
+
+    var greenIcon = new L.Icon({
+      iconUrl: 'images/marker-icon-2x-green.png',
+      shadowUrl: 'images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    markerActualSpot = L.marker(spotToGuessCoordsLatLng, {icon: greenIcon}).addTo(map);
+
+    var group = new L.featureGroup([markerActualSpot, markerGuess]);
+
+    map.fitBounds(group.getBounds());
+
+    console.dir(distance);
+    console.dir(spotToGuessCoords);
+    console.dir(spotToGuessCoordsLatLng);
+
+    const points = calculatePoints(miles);
+
+    document.querySelector('#notice').innerHTML = '<h1>' + points.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' Points</h1>' + miles.toLocaleString(undefined, {maximumFractionDigits: 1}) + ' miles away!'
+
+    setTimeout(function(){
+        document.querySelector('#notice').innerText = '';
+    }, 5000);
+
+}
+
+map.on('click', onMapClick);
+
+
+
+
+
+
+
+
+
+
+// Load the JSON file
+fetch('cleaned.json')
+    .then(response => response.json())
+    .then(cities => {
+        // Set up your access token and endpoint
+        const access_token = "MLYARDcToZBMDfeucdaOoi2vFMbG4BZCXJW5Bkng1kU9LYBGtrLhxIfuSZAvGgjTcZAPZC5aIFtiy899ZByI9HhUEiUo63gIeGZAJx5vHZB98DltZAb9RzRVxpvTaJ6ZATVFj1AZDZD";
+        const endpoint = 'https://graph.mapillary.com/images';
+
+        const saved_images = [];
+
+            const cityid = Math.floor(Math.random() * 9999) + 1;
+
+            const random_lat = cities[cityid].lat;
+            const random_lon = cities[cityid].lon;
+
+            const params = new URLSearchParams({
+                access_token: access_token,
+                is_pano: 'true',
+                bbox: `${random_lon-1.0},${random_lat-1.0},${random_lon+1.0},${random_lat+1.0}`,
+                limit: '1'
+            });
+
+            fetch(`${endpoint}?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data || !data.data || !data.data[0] || !data.data[0].id) return;
+
+                    const image_id = data.data[0].id;
+
+                    spotToGuessCoords = {
+                        lat:data.data[0].geometry.coordinates[1],
+                        lng:data.data[0].geometry.coordinates[0]
+                    }
+
+                    console.warn(data.data[0]);
+
+                    var {Viewer} = mapillary;
+                    var viewer = new Viewer({
+                        accessToken: 'MLYARDcToZBMDfeucdaOoi2vFMbG4BZCXJW5Bkng1kU9LYBGtrLhxIfuSZAvGgjTcZAPZC5aIFtiy899ZByI9HhUEiUo63gIeGZAJx5vHZB98DltZAb9RzRVxpvTaJ6ZATVFj1AZDZD',
+                        container: 'panorama',
+                        imageId: image_id,
+                     });
+
+                })
+                .catch(error => console.error('Error:', error));
+
+    })
+    .catch(error => console.error('Error:', error));
+
+
+
+
+
+
+
+
+fetch('saved.json').
+    then(response=>response.json()).
+    then(response => {
+
+        return;
+
+        console.dir(response);
+
+        /*
+        let photo = document.querySelector('#photo');
+        photo.setAttribute('src', '/photos/' + response[Math.floor(Math.random() * 720)].image_id + '.jpg');
+        photo.addEventListener('load', function(){
+            photo.style.opacity = 1;
+        });
+        */
+
+        //const spot = response[Math.floor(Math.random() * 720)];
+
+        const spot = response.find(r => r.image_id === '1390256495183830');
+
+
+        if (spot.lat && spot.lon){
+            spotToGuessCoords = {
+                lat:spot.lat,
+                lng:spot.lon
+            }
+        }
+
+        console.warn(spot);
+
+        var {Viewer} = mapillary;
+        var viewer = new Viewer({
+            accessToken: 'MLYARDcToZBMDfeucdaOoi2vFMbG4BZCXJW5Bkng1kU9LYBGtrLhxIfuSZAvGgjTcZAPZC5aIFtiy899ZByI9HhUEiUo63gIeGZAJx5vHZB98DltZAb9RzRVxpvTaJ6ZATVFj1AZDZD',
+            container: 'panorama',
+            imageId: spot.image_id,
+         });
+
+     });
+
+</script>
+
+
+<!--<img id="photo" src="/photos/1351531482233718.jpg" style="opacity:0; position:fixed; top:50%; left:50%; width:50vw; height:50vh; transform:translate3d(-50%,-50%,0); z-index:10000;">-->
+
+
+</body>
+</html>
